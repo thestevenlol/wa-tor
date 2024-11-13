@@ -6,3 +6,10 @@ Wa-Tor is a population dynamics simulation devised by A. K. Dewdney and presente
 Wa-Tor is usually implemented as a two-dimensional grid with three colours, one for fish, one for sharks and one for empty water. If a creature moves past the edge of the grid, it reappears on the opposite side. The sharks are predatory and eat the fish. Both sharks and fish live, move, reproduce and die in Wa-Tor according to the simple rules defined below. From these simple rules, complex emergent behavior can be seen to arise. (Source: Wikipedia)  
 
 This project was made as required for the Concurrent Development module for the Software Development module at SETU Carlow.
+
+## Dependencies
+
+1. [ebiten](https://github.com/hajimehoshi/ebiten), "A dead simple 2D game engine for Go"  
+To use ebiten on Linux please refer to [this link](https://ebitengine.org/en/documents/install.html?os=linux) to install the required dependencies for your Linux distribution. 
+  
+
