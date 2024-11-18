@@ -7,6 +7,10 @@ Wa-Tor is usually implemented as a two-dimensional grid with three colours, one 
 
 This project was made as required for the Concurrent Development module for the Software Development module at SETU Carlow.
 
+## Disclaimer
+
+Parts of this project had AI (ChatGPT, Claude) assistance involved. Most of this was for documentation purposes and some code assistance. All code and documentation has been reviewed manually prior to submission.
+
 ## Dependencies
 
 1. [ebiten](https://github.com/hajimehoshi/ebiten), "A dead simple 2D game engine for Go"  

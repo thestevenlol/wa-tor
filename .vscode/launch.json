@@ -1,0 +1,12 @@
+{
+    "configurations": [
+        {
+            "type": "go",
+            "request": "launch",
+            "name": "Launch Go Program",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

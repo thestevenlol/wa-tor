@@ -7,7 +7,7 @@ import (
 
 func TestInitialize(t *testing.T) {
 	game := &Game{}
-	game.Initialize()
+	game.Initialise()
 
 	// Test counts
 	fishCount := 0

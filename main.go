@@ -40,6 +40,30 @@ type Game struct {
 	grid [gridSize][gridSize]Cell
 }
 
+/**
+ * @brief Initialises the game grid with fish, sharks, and empty cells based on predefined probabilities.
+ *
+ * This method populates the game grid with cells containing fish, sharks, or empty spaces.
+ * The probabilities for each cell type are determined by the constants `fishPercentage` and `sharkPercentage`.
+ * Each cell containing a fish or shark is initialised with its respective breed and starvation times.
+ *
+ * @details The grid is a 2D array, and each cell is assigned one of the following types:
+ * - Fish: Assigned if a random number is less than `fishPercentage`.
+ * - Shark: Assigned if a random number falls between `fishPercentage` and `fishPercentage + sharkPercentage`.
+ * - Empty: Assigned otherwise.
+ *
+ * The function uses the following constants:
+ * - `fishPercentage`: The percentage of cells that should initially contain fish.
+ * - `sharkPercentage`: The percentage of cells that should initially contain sharks.
+ * - `fishBreedTime`: The time for fish to reproduce.
+ * - `sharkBreedTime`: The time for sharks to reproduce.
+ * - `sharkStarveTime`: The time for sharks to starve without food.
+ *
+ * @note Assumes `gridSize` is a square dimension of the grid and `rand.Intn` generates a random integer.
+ *
+ * @param None This method does not take any parameters as it operates directly on the `Game` object.
+ * @return void This method does not return a value.
+ */
 func (g *Game) Initialise() {
 	for y := 0; y < gridSize; y++ {
 		for x := 0; x < gridSize; x++ {
@@ -210,7 +234,7 @@ func main() {
 	game.Initialise()
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Wator Simulation in Go! (Ebiten)")
-	ebiten.SetTPS(30)
+	ebiten.SetTPS(10)
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
