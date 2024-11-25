@@ -1,13 +1,18 @@
 package main
 
 import (
+	"encoding/csv"
+	"fmt"
 	"image/color"
 	"log"
+	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"golang.org/x/exp/rand"
+	"golang.org/x/image/font/basicfont"
 )
 
 const (
@@ -20,6 +25,8 @@ const (
 	sharkStarveTime = 3
 	fishPercentage  = 50
 	sharkPercentage = 20
+	nThreads        = 4
+	subGridSize     = gridSize / nThreads
 )
 
 type CellType int
@@ -37,7 +44,9 @@ type Cell struct {
 }
 
 type Game struct {
-	grid [gridSize][gridSize]Cell
+	grid      [gridSize][gridSize]Cell
+	logFile   *os.File
+	csvWriter *csv.Writer
 }
 
 /**
@@ -92,7 +101,34 @@ func (g *Game) getAdjacent(x, y int) [][2]int {
 	return adjacent
 }
 
+// Algorithm to shuffle a 2D slice
+func shuffle(slice [][2]int) {
+	rand.Seed(uint64(time.Now().UnixNano()))
+
+	for i := len(slice) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)                   // Generate a random index
+		slice[i], slice[j] = slice[j], slice[i] // Swap elements
+	}
+}
+
 func (g *Game) Update() error {
+	// Retrieve the current TPS
+	tps := ebiten.ActualTPS()
+
+	// Get the current timestamp
+	timestamp := time.Now().Format(time.RFC3339)
+
+	// Create a record with the timestamp and TPS
+	record := []string{timestamp, fmt.Sprintf("%.2f", tps)}
+
+	// Write the record to the CSV file
+	if err := g.csvWriter.Write(record); err != nil {
+		return err
+	}
+
+	// Flush the writer to ensure the record is written to the file
+	g.csvWriter.Flush()
+
 	// Create temporary grid to store next state
 	newGrid := [gridSize][gridSize]Cell{}
 	moved := make(map[[2]int]bool)
@@ -107,6 +143,7 @@ func (g *Game) Update() error {
 			cell := g.grid[y][x]
 			if cell.Type == Shark {
 				adjacent := g.getAdjacent(x, y)
+				shuffle(adjacent)
 
 				// Look for fish to eat
 				fishFound := false
@@ -171,6 +208,7 @@ func (g *Game) Update() error {
 			cell := g.grid[y][x]
 			if cell.Type == Fish {
 				adjacent := g.getAdjacent(x, y)
+				shuffle(adjacent)
 				emptySpaces := make([][2]int, 0)
 
 				for _, pos := range adjacent {
@@ -222,6 +260,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			vector.DrawFilledRect(screen, float32(x*cellSize), float32(y*cellSize), cellSize, cellSize, colour, false)
 		}
 	}
+
+	// Get the current FPS
+	tps := ebiten.ActualTPS()
+
+	// Convert the FPS value to a string
+	tpsString := fmt.Sprintf("FPS: %.2f", tps)
+
+	// Draw the FPS value on the screen at the top-left corner
+	text.Draw(screen, tpsString, basicfont.Face7x13, 10, 20, color.White)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -234,7 +281,8 @@ func main() {
 	game.Initialise()
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Wator Simulation in Go! (Ebiten)")
-	ebiten.SetTPS(10)
+	ebiten.SetVsyncEnabled(false)
+	ebiten.SetTPS(ebiten.SyncWithFPS)
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
