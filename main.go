@@ -89,6 +89,11 @@ func (g *Game) Initialise() {
 	}
 }
 
+// getAdjacent returns the coordinates of the adjacent cells for a given cell (x, y).
+// It considers the grid to be toroidal, meaning the edges wrap around.
+// The function calculates the new coordinates by adding the direction offsets to the current coordinates,
+// and then uses modulo operation to ensure the coordinates wrap around the grid edges.
+// The directions array contains the four possible adjacent positions: left, right, up, and down.
 func (g *Game) getAdjacent(x, y int) [][2]int {
 	adjacent := make([][2]int, 0, 4)
 	directions := [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
@@ -111,24 +116,16 @@ func shuffle(slice [][2]int) {
 	}
 }
 
+// Update simulates one step of the Wa-Tor world simulation.
+// The simulation follows these rules:
+// 1. Sharks move first, trying to eat fish. If no fish are adjacent, they move to empty spaces
+// 2. If a shark doesn't eat for sharkStarveTime steps, it dies
+// 3. After sharkBreedTime steps, sharks breed into their old position
+// 4. Fish move second, only to empty spaces
+// 5. After fishBreedTime steps, fish breed into their old position
+// The function uses a temporary grid to store the next state and a map to track moved cells
+// Returns an error if there are any issues
 func (g *Game) Update() error {
-	// Retrieve the current TPS
-	tps := ebiten.ActualTPS()
-
-	// Get the current timestamp
-	timestamp := time.Now().Format(time.RFC3339)
-
-	// Create a record with the timestamp and TPS
-	record := []string{timestamp, fmt.Sprintf("%.2f", tps)}
-
-	// Write the record to the CSV file
-	if err := g.csvWriter.Write(record); err != nil {
-		return err
-	}
-
-	// Flush the writer to ensure the record is written to the file
-	g.csvWriter.Flush()
-
 	// Create temporary grid to store next state
 	newGrid := [gridSize][gridSize]Cell{}
 	moved := make(map[[2]int]bool)
