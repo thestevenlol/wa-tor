@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/csv"
 	"fmt"
 	"image/color"
 	"log"
-	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -25,8 +23,8 @@ const (
 	sharkStarveTime = 3
 	fishPercentage  = 50
 	sharkPercentage = 20
-	nThreads        = 4
-	subGridSize     = gridSize / nThreads
+	// nThreads        = 4
+	// subGridSize     = gridSize / nThreads
 )
 
 type CellType int
@@ -37,6 +35,10 @@ const (
 	Shark
 )
 
+// Cell struct
+// Parameters: Type, BreedTime, StarveTime
+// Returns: None
+// Description: Cell struct to represent a cell in the grid
 type Cell struct {
 	Type       CellType
 	BreedTime  int
@@ -44,9 +46,7 @@ type Cell struct {
 }
 
 type Game struct {
-	grid      [gridSize][gridSize]Cell
-	logFile   *os.File
-	csvWriter *csv.Writer
+	grid [gridSize][gridSize]Cell
 }
 
 /**
@@ -98,6 +98,13 @@ func (g *Game) getAdjacent(x, y int) [][2]int {
 	adjacent := make([][2]int, 0, 4)
 	directions := [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
 
+	/*
+
+		current cell: (5, 10)
+		adjacent cells: (4, 10), (6, 10), (5, 9), (5, 11)
+
+	*/
+
 	for _, d := range directions {
 		newX := (x + d[0] + gridSize) % gridSize
 		newY := (y + d[1] + gridSize) % gridSize
@@ -106,8 +113,11 @@ func (g *Game) getAdjacent(x, y int) [][2]int {
 	return adjacent
 }
 
-// Algorithm to shuffle a 2D slice
-func shuffle(slice [][2]int) {
+// Shuffle function
+// Parameters: slice
+// Returns: None
+// Description: Shuffles the slice in place using the Fisher-Yates algorithm
+func Shuffle(slice [][2]int) {
 	rand.Seed(uint64(time.Now().UnixNano()))
 
 	for i := len(slice) - 1; i > 0; i-- {
@@ -140,7 +150,7 @@ func (g *Game) Update() error {
 			cell := g.grid[y][x]
 			if cell.Type == Shark {
 				adjacent := g.getAdjacent(x, y)
-				shuffle(adjacent)
+				Shuffle(adjacent)
 
 				// Look for fish to eat
 				fishFound := false
@@ -205,7 +215,6 @@ func (g *Game) Update() error {
 			cell := g.grid[y][x]
 			if cell.Type == Fish {
 				adjacent := g.getAdjacent(x, y)
-				shuffle(adjacent)
 				emptySpaces := make([][2]int, 0)
 
 				for _, pos := range adjacent {
