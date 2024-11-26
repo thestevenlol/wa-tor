@@ -49,30 +49,10 @@ type Game struct {
 	grid [gridSize][gridSize]Cell
 }
 
-/**
- * @brief Initialises the game grid with fish, sharks, and empty cells based on predefined probabilities.
- *
- * This method populates the game grid with cells containing fish, sharks, or empty spaces.
- * The probabilities for each cell type are determined by the constants `fishPercentage` and `sharkPercentage`.
- * Each cell containing a fish or shark is initialised with its respective breed and starvation times.
- *
- * @details The grid is a 2D array, and each cell is assigned one of the following types:
- * - Fish: Assigned if a random number is less than `fishPercentage`.
- * - Shark: Assigned if a random number falls between `fishPercentage` and `fishPercentage + sharkPercentage`.
- * - Empty: Assigned otherwise.
- *
- * The function uses the following constants:
- * - `fishPercentage`: The percentage of cells that should initially contain fish.
- * - `sharkPercentage`: The percentage of cells that should initially contain sharks.
- * - `fishBreedTime`: The time for fish to reproduce.
- * - `sharkBreedTime`: The time for sharks to reproduce.
- * - `sharkStarveTime`: The time for sharks to starve without food.
- *
- * @note Assumes `gridSize` is a square dimension of the grid and `rand.Intn` generates a random integer.
- *
- * @param None This method does not take any parameters as it operates directly on the `Game` object.
- * @return void This method does not return a value.
- */
+// Initialise function
+// Parameters: None
+// Returns: None
+// Description: Initialises the game grid by randomly placing fish and sharks
 func (g *Game) Initialise() {
 	for y := 0; y < gridSize; y++ {
 		for x := 0; x < gridSize; x++ {
@@ -89,12 +69,11 @@ func (g *Game) Initialise() {
 	}
 }
 
-// getAdjacent returns the coordinates of the adjacent cells for a given cell (x, y).
-// It considers the grid to be toroidal, meaning the edges wrap around.
-// The function calculates the new coordinates by adding the direction offsets to the current coordinates,
-// and then uses modulo operation to ensure the coordinates wrap around the grid edges.
-// The directions array contains the four possible adjacent positions: left, right, up, and down.
-func (g *Game) getAdjacent(x, y int) [][2]int {
+// GetAdjacent function
+// Parameters: x, y
+// Returns: [][2]int
+// Description: Returns the adjacent cells to the given cell
+func (g *Game) GetAdjacent(x, y int) [][2]int {
 	adjacent := make([][2]int, 0, 4)
 	directions := [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
 
@@ -135,6 +114,11 @@ func Shuffle(slice [][2]int) {
 // 5. After fishBreedTime steps, fish breed into their old position
 // The function uses a temporary grid to store the next state and a map to track moved cells
 // Returns an error if there are any issues
+
+// Update function]
+// Parameters: None
+// Returns: error
+// Description: Updates the game state by simulating one step of the Wa-Tor world simulation.
 func (g *Game) Update() error {
 	// Create temporary grid to store next state
 	newGrid := [gridSize][gridSize]Cell{}
@@ -149,7 +133,7 @@ func (g *Game) Update() error {
 
 			cell := g.grid[y][x]
 			if cell.Type == Shark {
-				adjacent := g.getAdjacent(x, y)
+				adjacent := g.GetAdjacent(x, y)
 				Shuffle(adjacent)
 
 				// Look for fish to eat
@@ -214,7 +198,7 @@ func (g *Game) Update() error {
 
 			cell := g.grid[y][x]
 			if cell.Type == Fish {
-				adjacent := g.getAdjacent(x, y)
+				adjacent := g.GetAdjacent(x, y)
 				emptySpaces := make([][2]int, 0)
 
 				for _, pos := range adjacent {
