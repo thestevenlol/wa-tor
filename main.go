@@ -115,7 +115,7 @@ func Shuffle(slice [][2]int) {
 // The function uses a temporary grid to store the next state and a map to track moved cells
 // Returns an error if there are any issues
 
-// Update function]
+// Update function
 // Parameters: None
 // Returns: error
 // Description: Updates the game state by simulating one step of the Wa-Tor world simulation.
