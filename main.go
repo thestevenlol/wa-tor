@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"github.com/hajimehoshi/ebiten/v2/vector"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"golang.org/x/exp/rand"
-	"golang.org/x/image/font/basicfont"
 )
 
 const (
@@ -24,8 +22,8 @@ const (
 	fishPercentage  = 50
 	sharkPercentage = 20
 	logFilePrefix   = "tpsMeasurementNThreads"
-	// nThreads        = 4
-	// subGridSize     = gridSize / nThreads
+	nThreads        = 12
+	subGridSize     = gridSize / nThreads
 )
 
 type CellType int
@@ -48,6 +46,29 @@ type Cell struct {
 
 type Game struct {
 	grid [gridSize][gridSize]Cell
+}
+
+func getBlockSize(threadId int) [][2]int {
+	blockSize := gridSize / nThreads
+	startX := threadId * blockSize
+	endX := startX + blockSize
+	startY := threadId * blockSize
+	endY := startY + blockSize
+
+	if threadId == nThreads-1 {
+		endX = gridSize
+		endY = gridSize
+	}
+
+	return [][2]int{{startX, endX}, {startY, endY}}
+}
+
+func assignThreadBlocks() map[int][][2]int {
+	threads := make(map[int][][2]int) // threadId -> [[startX,endX],[startY,endY]]
+	for i := 0; i < nThreads; i++ {
+		threads[i] = getBlockSize(i)
+	}
+	return threads
 }
 
 // Initialise function
@@ -106,16 +127,7 @@ func Shuffle(slice [][2]int) {
 	}
 }
 
-// Update function
-// Parameters: None
-// Returns: error
-// Description: Updates the game state by simulating one step of the Wa-Tor world simulation.
-func (g *Game) Update() error {
-	// Create temporary grid to store next state
-	newGrid := [gridSize][gridSize]Cell{}
-	moved := make(map[[2]int]bool)
-
-	// First pass: Update sharks
+func updateShark(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Game) error {
 	for y := 0; y < gridSize; y++ {
 		for x := 0; x < gridSize; x++ {
 			if moved[[2]int{x, y}] {
@@ -179,8 +191,10 @@ func (g *Game) Update() error {
 			}
 		}
 	}
+	return nil
+}
 
-	// Second pass: Update fish
+func updateFish(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Game) {
 	for y := 0; y < gridSize; y++ {
 		for x := 0; x < gridSize; x++ {
 			if moved[[2]int{x, y}] {
@@ -218,14 +232,29 @@ func (g *Game) Update() error {
 			}
 		}
 	}
+}
+
+// Update function
+// Parameters: None
+// Returns: error
+// Description: Updates the game state by simulating one step of the Wa-Tor world simulation.
+func (g *Game) Update() error {
+	// Use pointer to grid
+	newGrid := &[gridSize][gridSize]Cell{}
+	moved := make(map[[2]int]bool)
+
+	updateShark(newGrid, moved, g)
+	updateFish(newGrid, moved, g)
 
 	// Copy new grid state
-	g.grid = newGrid
+	g.grid = *newGrid
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.Black)
+	cellSize := 5 // or whatever size you want each cell to be
+
 	for y := 0; y < gridSize; y++ {
 		for x := 0; x < gridSize; x++ {
 			cell := g.grid[y][x]
@@ -238,18 +267,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			default:
 				continue
 			}
-			vector.DrawFilledRect(screen, float32(x*cellSize), float32(y*cellSize), cellSize, cellSize, colour, false)
+
+			// Draw a rectangle for each cell
+			ebitenutil.DrawRect(
+				screen,
+				float64(x*cellSize),
+				float64(y*cellSize),
+				float64(cellSize),
+				float64(cellSize),
+				colour,
+			)
 		}
 	}
-
-	// Get the current FPS
-	tps := ebiten.ActualTPS()
-
-	// Convert the FPS value to a string
-	tpsString := fmt.Sprintf("FPS: %.2f", tps)
-
-	// Draw the FPS value on the screen at the top-left corner
-	text.Draw(screen, tpsString, basicfont.Face7x13, 10, 20, color.White)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -257,6 +286,14 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func main() {
+	threadLimits := assignThreadBlocks()
+	for threadId, limits := range threadLimits {
+		fmt.Printf("Thread %d: X[%d:%d] Y[%d:%d]\n",
+			threadId,
+			limits[0][0], limits[0][1],
+			limits[1][0], limits[1][1])
+	}
+
 	rand.Seed(uint64(time.Now().UnixNano()))
 	game := &Game{}
 	game.Initialise()
