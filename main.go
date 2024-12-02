@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"image/color"
 	"log"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -22,8 +25,8 @@ const (
 	fishPercentage  = 50
 	sharkPercentage = 20
 	logFilePrefix   = "tpsMeasurementNThreads"
-	nThreads        = 12
-	subGridSize     = gridSize / nThreads
+	nThreads        = 4
+	nRows           = screenHeight / nThreads
 )
 
 type CellType int
@@ -33,6 +36,11 @@ const (
 	Fish
 	Shark
 )
+
+type ThreadBounds struct {
+	MinY int
+	MaxY int
+}
 
 // Cell struct
 // Parameters: Type, BreedTime, StarveTime
@@ -48,28 +56,8 @@ type Game struct {
 	grid [gridSize][gridSize]Cell
 }
 
-func getBlockSize(threadId int) [][2]int {
-	blockSize := gridSize / nThreads
-	startX := threadId * blockSize
-	endX := startX + blockSize
-	startY := threadId * blockSize
-	endY := startY + blockSize
-
-	if threadId == nThreads-1 {
-		endX = gridSize
-		endY = gridSize
-	}
-
-	return [][2]int{{startX, endX}, {startY, endY}}
-}
-
-func assignThreadBlocks() map[int][][2]int {
-	threads := make(map[int][][2]int) // threadId -> [[startX,endX],[startY,endY]]
-	for i := 0; i < nThreads; i++ {
-		threads[i] = getBlockSize(i)
-	}
-	return threads
-}
+var threads []ThreadBounds
+var current time.Time
 
 // Initialise function
 // Parameters: None
@@ -117,7 +105,7 @@ func (g *Game) GetAdjacent(x, y int) [][2]int {
 // Shuffle function
 // Parameters: slice
 // Returns: None
-// Description: Shuffles the slice in place using the Fisher-Yates algorithm
+// Description: Shuffles the slice in place
 func Shuffle(slice [][2]int) {
 	rand.Seed(uint64(time.Now().UnixNano()))
 
@@ -127,10 +115,10 @@ func Shuffle(slice [][2]int) {
 	}
 }
 
-func updateShark(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Game) error {
-	for y := 0; y < gridSize; y++ {
+func updateShark(newGrid *[gridSize][gridSize]Cell, yMin, yMax int, moved *SafeMap, g *Game) error {
+	for y := yMin; y < yMax; y++ {
 		for x := 0; x < gridSize; x++ {
-			if moved[[2]int{x, y}] {
+			if val, _ := moved.Get([2]int{x, y}); val {
 				continue
 			}
 
@@ -142,16 +130,18 @@ func updateShark(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Ga
 				// Look for fish to eat
 				fishFound := false
 				for _, pos := range adjacent {
-					if g.grid[pos[1]][pos[0]].Type == Fish && !moved[pos] {
-						// Shark eats fish and moves
-						newGrid[pos[1]][pos[0]] = Cell{
-							Type:       Shark,
-							BreedTime:  cell.BreedTime - 1,
-							StarveTime: sharkStarveTime,
+					if g.grid[pos[1]][pos[0]].Type == Fish {
+						if val, _ := moved.Get(pos); !val {
+							// Shark eats fish and moves
+							newGrid[pos[1]][pos[0]] = Cell{
+								Type:       Shark,
+								BreedTime:  cell.BreedTime - 1,
+								StarveTime: sharkStarveTime,
+							}
+							moved.Set(pos, true)
+							fishFound = true
+							break
 						}
-						moved[pos] = true
-						fishFound = true
-						break
 					}
 				}
 
@@ -159,8 +149,10 @@ func updateShark(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Ga
 					// Move to empty space if no fish found
 					emptySpaces := make([][2]int, 0)
 					for _, pos := range adjacent {
-						if g.grid[pos[1]][pos[0]].Type == Empty && !moved[pos] {
-							emptySpaces = append(emptySpaces, pos)
+						if g.grid[pos[1]][pos[0]].Type == Empty {
+							if val, _ := moved.Get(pos); !val {
+								emptySpaces = append(emptySpaces, pos)
+							}
 						}
 					}
 
@@ -183,7 +175,7 @@ func updateShark(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Ga
 							}
 							newGrid[newPos[1]][newPos[0]] = cell
 						}
-						moved[newPos] = true
+						moved.Set(newPos, true)
 					} else {
 						newGrid[y][x] = cell
 					}
@@ -194,10 +186,10 @@ func updateShark(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Ga
 	return nil
 }
 
-func updateFish(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Game) {
-	for y := 0; y < gridSize; y++ {
+func updateFish(newGrid *[gridSize][gridSize]Cell, yMin, yMax int, moved *SafeMap, g *Game) {
+	for y := yMin; y < yMax; y++ {
 		for x := 0; x < gridSize; x++ {
-			if moved[[2]int{x, y}] {
+			if val, _ := moved.Get([2]int{x, y}); val {
 				continue
 			}
 
@@ -207,8 +199,10 @@ func updateFish(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Gam
 				emptySpaces := make([][2]int, 0)
 
 				for _, pos := range adjacent {
-					if g.grid[pos[1]][pos[0]].Type == Empty && !moved[pos] {
-						emptySpaces = append(emptySpaces, pos)
+					if g.grid[pos[1]][pos[0]].Type == Empty {
+						if val, _ := moved.Get(pos); !val {
+							emptySpaces = append(emptySpaces, pos)
+						}
 					}
 				}
 
@@ -225,7 +219,7 @@ func updateFish(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Gam
 						cell.BreedTime = fishBreedTime
 					}
 					newGrid[newPos[1]][newPos[0]] = cell
-					moved[newPos] = true
+					moved.Set(newPos, true)
 				} else {
 					newGrid[y][x] = cell
 				}
@@ -234,19 +228,53 @@ func updateFish(newGrid *[gridSize][gridSize]Cell, moved map[[2]int]bool, g *Gam
 	}
 }
 
-// Update function
-// Parameters: None
-// Returns: error
-// Description: Updates the game state by simulating one step of the Wa-Tor world simulation.
+type SafeMap struct {
+	mu    sync.Mutex
+	moved map[[2]int]bool
+}
+
+func NewSafeMap() *SafeMap {
+	return &SafeMap{
+		moved: make(map[[2]int]bool),
+	}
+}
+
+func (sm *SafeMap) Set(key [2]int, value bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.moved[key] = value
+}
+
+func (sm *SafeMap) Get(key [2]int) (bool, bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	val, ok := sm.moved[key]
+	return val, ok
+}
+
+// Update Update function to use SafeMap
 func (g *Game) Update() error {
-	// Use pointer to grid
 	newGrid := &[gridSize][gridSize]Cell{}
-	moved := make(map[[2]int]bool)
+	safeMap := NewSafeMap()
+	var wg sync.WaitGroup
+	if time.Since(current).Milliseconds() > 500 {
+		WriteTPS()
+		current = time.Now()
+	}
 
-	updateShark(newGrid, moved, g)
-	updateFish(newGrid, moved, g)
+	for _, thread := range threads {
+		wg.Add(2) // One for shark, one for fish
+		go func(t ThreadBounds) {
+			defer wg.Done()
+			updateShark(newGrid, t.MinY, t.MaxY, safeMap, g)
+		}(thread)
+		go func(t ThreadBounds) {
+			defer wg.Done()
+			updateFish(newGrid, t.MinY, t.MaxY, safeMap, g)
+		}(thread)
+	}
 
-	// Copy new grid state
+	wg.Wait()
 	g.grid = *newGrid
 	return nil
 }
@@ -285,15 +313,72 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return screenWidth, screenHeight
 }
 
-func main() {
-	threadLimits := assignThreadBlocks()
-	for threadId, limits := range threadLimits {
-		fmt.Printf("Thread %d: X[%d:%d] Y[%d:%d]\n",
-			threadId,
-			limits[0][0], limits[0][1],
-			limits[1][0], limits[1][1])
+func WriteTPS() {
+	file, err := os.OpenFile(fmt.Sprintf("%s_%d.csv", logFilePrefix, nThreads), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write headers if file is empty
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if fileInfo.Size() == 0 {
+		if err := writer.Write([]string{"tps"}); err != nil {
+			log.Fatal(err)
+		}
 	}
 
+	// Write current TPS
+	tps := ebiten.ActualTPS()
+	if err := writer.Write([]string{fmt.Sprintf("%.2f", tps)}); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func GetThreadRowHeights() []int {
+	// Calculate base height per thread
+	baseHeight := gridSize / nThreads
+	remainder := gridSize % nThreads
+
+	// Distribute heights
+	heights := make([]int, nThreads)
+	for i := range heights {
+		heights[i] = baseHeight
+		// Distribute remainder one extra row at a time
+		if remainder > 0 {
+			heights[i]++
+			remainder--
+		}
+	}
+
+	return heights
+}
+
+func GetThreadYBounds() []ThreadBounds {
+	heights := GetThreadRowHeights()
+	bounds := make([]ThreadBounds, len(heights))
+
+	currentY := 0
+	for i, height := range heights {
+		bounds[i] = ThreadBounds{
+			MinY: currentY,
+			MaxY: currentY + height,
+		}
+		currentY += height
+	}
+
+	return bounds
+}
+
+func main() {
+	threads = GetThreadYBounds()
+	current = time.Now()
 	rand.Seed(uint64(time.Now().UnixNano()))
 	game := &Game{}
 	game.Initialise()
