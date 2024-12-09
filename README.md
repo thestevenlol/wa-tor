@@ -1,5 +1,9 @@
 # Wa-Tor Simulation written in Go | Jack Foley - C00274246
 
+**GitHub Link**
+---------------
+https://github.com/thestevenlol/wa-tor
+
 **Introduction**
 ---------------
 
@@ -68,3 +72,8 @@ go run main.go
 ``` 
 
 This will activate the simulation and show the actual state in the screen. The TPS measurement will be written to a CSV file every 500ms.
+
+**Documentation**
+------------------ 
+
+To view the documentation for the project, in the root folder you will find a file called `wator - Go Documentation Server.htm`. You can open this file with your favourite search engine and view it online. 
