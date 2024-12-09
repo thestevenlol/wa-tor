@@ -19,13 +19,13 @@ const (
 	screenWidth     = 1000
 	screenHeight    = 1000
 	gridSize        = screenWidth / cellSize
-	cellSize        = 3
+	cellSize        = 2
 	fishBreedTime   = 3
 	sharkBreedTime  = 8
 	sharkStarveTime = 3
 	fishPercentage  = 50
 	sharkPercentage = 20
-	nThreads        = 4
+	nThreads        = 8
 	logFilePrefix   = "tpsMeasurementNThreads"
 	nRows           = screenHeight / nThreads
 )
@@ -69,15 +69,16 @@ func (g *Game) Initialise() {
 			random := rand.Intn(100)
 			var cell Cell
 			if random < fishPercentage {
-				atomic.StoreInt32(&g.grid[y][x].Type, Fish)
+				cell.Type = Fish
 				cell.BreedTime = fishBreedTime
 			} else if random < (fishPercentage + sharkPercentage) {
-				atomic.StoreInt32(&g.grid[y][x].Type, Shark)
+				cell.Type = Shark
 				cell.BreedTime = sharkBreedTime
 				cell.StarveTime = sharkStarveTime
 			} else {
-				atomic.StoreInt32(&g.grid[y][x].Type, Empty)
+				cell.Type = Empty
 			}
+
 			g.grid[y][x] = cell
 		}
 	}
@@ -135,16 +136,15 @@ func updateShark(newGrid *[gridSize][gridSize]Cell, yMin, yMax int, occupied *[g
 				fishFound := false
 				for _, pos := range adjacent {
 					if atomic.LoadInt32(&g.grid[pos[1]][pos[0]].Type) == Fish {
-						if val := atomic.LoadInt32(&occupied[y][x]); val == 0 {
+						if atomic.CompareAndSwapInt32(&occupied[pos[1]][pos[0]], 0, 1) {
 							// Shark eats fish and moves
 							newGrid[pos[1]][pos[0]] = Cell{
 								Type:       Shark,
 								BreedTime:  cell.BreedTime - 1,
 								StarveTime: sharkStarveTime,
 							}
-							atomic.StoreInt32(&occupied[y][x], 1)
-							fishFound = true
-							break
+						} else {
+							continue
 						}
 					}
 				}
@@ -154,7 +154,7 @@ func updateShark(newGrid *[gridSize][gridSize]Cell, yMin, yMax int, occupied *[g
 					emptySpaces := make([][2]int, 0)
 					for _, pos := range adjacent {
 						if atomic.LoadInt32(&g.grid[pos[1]][pos[0]].Type) == Empty {
-							if val := atomic.LoadInt32(&occupied[y][x]); val == 0 {
+							if atomic.CompareAndSwapInt32(&occupied[y][x], 0, 1) {
 								emptySpaces = append(emptySpaces, pos)
 							}
 						}
@@ -182,7 +182,7 @@ func updateShark(newGrid *[gridSize][gridSize]Cell, yMin, yMax int, occupied *[g
 						// When moving
 						newGrid[y][x] = Cell{Type: Empty}
 						if !atomic.CompareAndSwapInt32(&occupied[newPos[1]][newPos[0]], 0, 1) {
-							continue // Position already taken
+							continue
 						}
 					} else {
 						newGrid[y][x] = cell
@@ -210,7 +210,7 @@ func updateFish(newGrid *[gridSize][gridSize]Cell, yMin, yMax int, occupied *[gr
 
 				for _, pos := range adjacent {
 					if atomic.LoadInt32(&g.grid[pos[1]][pos[0]].Type) == Empty {
-						if val := atomic.LoadInt32(&occupied[pos[1]][pos[0]]); val == 0 {
+						if atomic.CompareAndSwapInt32(&occupied[pos[1]][pos[0]], 0, 1) {
 							emptySpaces = append(emptySpaces, pos)
 						}
 					}
@@ -233,7 +233,7 @@ func updateFish(newGrid *[gridSize][gridSize]Cell, yMin, yMax int, occupied *[gr
 					newGrid[newPos[1]][newPos[0]].BreedTime = cell.BreedTime
 
 					if !atomic.CompareAndSwapInt32(&occupied[newPos[1]][newPos[0]], 0, 1) {
-						continue // Position already taken
+						continue
 					}
 				} else {
 					newGrid[y][x] = cell

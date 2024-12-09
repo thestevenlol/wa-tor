@@ -16,5 +16,5 @@ def plot_tps(thread_counts: list) -> plt:
     return plt
 
 if __name__ == "__main__":
-    threads = [1,2,4,8]
+    threads = [1,2,4,8,16]
     plot_tps(threads).savefig(f"tps.png")
